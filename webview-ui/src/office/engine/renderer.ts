@@ -34,8 +34,10 @@ import {
   VOID_TILE_OUTLINE_COLOR,
 } from '../../constants.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
+import { getPetSprites } from '../sprites/petSpriteData.js';
 import { getCachedSprite, getOutlineSprite } from '../sprites/spriteCache.js';
 import {
+  BUBBLE_HEART_SPRITE,
   BUBBLE_PERMISSION_SPRITE,
   BUBBLE_WAITING_SPRITE,
   getCharacterSprites,
@@ -43,6 +45,7 @@ import {
 import type {
   Character,
   FurnitureInstance,
+  Pet,
   Seat,
   SpriteData,
   TileType as TileTypeVal,
@@ -51,6 +54,7 @@ import { CharacterState, TILE_SIZE, TileType } from '../types.js';
 import { getWallInstances, hasWallSprites, wallColorToHex } from '../wallTiles.js';
 import { getCharacterSprite } from './characters.js';
 import { renderMatrixEffect } from './matrixEffect.js';
+import { getPetSpriteData } from './petEntity.js';
 
 // ── Render functions ────────────────────────────────────────────
 
@@ -116,6 +120,7 @@ export function renderScene(
   zoom: number,
   selectedAgentId: number | null,
   hoveredAgentId: number | null,
+  pets: Pet[] = [],
 ): void {
   const drawables: ZDrawable[] = [];
 
@@ -198,6 +203,29 @@ export function renderScene(
 
     drawables.push({
       zY: charZY,
+      draw: (c) => {
+        c.drawImage(cached, drawX, drawY);
+      },
+    });
+  }
+
+  // ── Pets ──────────────────────────────────────────────
+  for (const pet of pets) {
+    const petSprites = getPetSprites(pet.petType);
+    const spriteData = getPetSpriteData(pet, petSprites);
+    if (!spriteData) continue;
+
+    const cached = getCachedSprite(spriteData, zoom);
+    // Anchor at bottom-center at (pet.x, pet.y) — round to integer device pixels
+    const drawX = Math.round(offsetX + pet.x * zoom - cached.width / 2);
+    const drawY = Math.round(offsetY + pet.y * zoom - cached.height);
+
+    // Z-sort key: matches the chair/character "row boundary" formula.
+    // pet.y is the pixel center, so + TILE_SIZE/2 lifts us to the row's bottom edge.
+    const petZY = pet.y + TILE_SIZE / 2;
+
+    drawables.push({
+      zY: petZY,
       draw: (c) => {
         c.drawImage(cached, drawX, drawY);
       },
@@ -526,6 +554,38 @@ function renderBubbles(
   }
 }
 
+function renderPetBubbles(
+  ctx: CanvasRenderingContext2D,
+  pets: Pet[],
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): void {
+  for (const pet of pets) {
+    if (!pet.bubbleType) continue;
+
+    const sprite = BUBBLE_HEART_SPRITE;
+
+    // Fade in the last BUBBLE_FADE_DURATION_SEC of the lifetime
+    let alpha = 1.0;
+    if (pet.bubbleTimer < BUBBLE_FADE_DURATION_SEC) {
+      alpha = Math.max(0, pet.bubbleTimer / BUBBLE_FADE_DURATION_SEC);
+    }
+
+    const cached = getCachedSprite(sprite, zoom);
+    // Anchor: centered above the pet's head. Pet is anchored bottom-center at
+    // (pet.x, pet.y); sprite is ~16 tall, so back up TILE_SIZE pixels and add
+    // a 1-sprite-pixel gap (scaled by zoom).
+    const bubbleX = Math.round(offsetX + pet.x * zoom - cached.width / 2);
+    const bubbleY = Math.round(offsetY + (pet.y - TILE_SIZE) * zoom - cached.height - 1 * zoom);
+
+    ctx.save();
+    if (alpha < 1.0) ctx.globalAlpha = alpha;
+    ctx.drawImage(cached, bubbleX, bubbleY);
+    ctx.restore();
+  }
+}
+
 export interface ButtonBounds {
   /** Center X in device pixels */
   cx: number;
@@ -586,6 +646,7 @@ export function renderFrame(
   tileColors?: Array<ColorValue | null>,
   layoutCols?: number,
   layoutRows?: number,
+  pets?: Pet[],
 ): { offsetX: number; offsetY: number } {
   // Clear
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -624,10 +685,24 @@ export function renderFrame(
   // Draw walls + furniture + characters (z-sorted)
   const selectedId = selection?.selectedAgentId ?? null;
   const hoveredId = selection?.hoveredAgentId ?? null;
-  renderScene(ctx, allFurniture, characters, offsetX, offsetY, zoom, selectedId, hoveredId);
+  renderScene(
+    ctx,
+    allFurniture,
+    characters,
+    offsetX,
+    offsetY,
+    zoom,
+    selectedId,
+    hoveredId,
+    pets ?? [],
+  );
 
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom);
+  // Pet heart bubbles (same overlay pass)
+  if (pets && pets.length > 0) {
+    renderPetBubbles(ctx, pets, offsetX, offsetY, zoom);
+  }
 
   // Editor overlays
   if (editor) {

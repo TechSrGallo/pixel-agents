@@ -4,7 +4,12 @@ import { Button } from '../../components/ui/Button.js';
 import { ColorPicker } from '../../components/ui/ColorPicker.js';
 import { ItemSelect } from '../../components/ui/ItemSelect.js';
 import type { ColorValue } from '../../components/ui/types.js';
-import { CANVAS_FALLBACK_TILE_COLOR } from '../../constants.js';
+import {
+  CANVAS_FALLBACK_TILE_COLOR,
+  EMPTY_SPRITE_THUMBNAIL_BG,
+  PET_THUMB_SCALE_MARGIN,
+  PET_THUMB_ZOOM,
+} from '../../constants.js';
 import { getColorizedSprite } from '../colorize.js';
 import { getColorizedFloorSprite, getFloorPatternCount, hasFloorSprites } from '../floorTiles.js';
 import type { FurnitureCategory, LoadedAssetData } from '../layout/furnitureCatalog.js';
@@ -13,6 +18,7 @@ import {
   getActiveCategories,
   getCatalogByCategory,
 } from '../layout/furnitureCatalog.js';
+import { getPetName, getPetSprites } from '../sprites/petSpriteData.js';
 import { getCachedSprite } from '../sprites/spriteCache.js';
 import type { TileType as TileTypeVal } from '../types.js';
 import { EditTool } from '../types.js';
@@ -35,6 +41,9 @@ interface EditorToolbarProps {
   onSelectedFurnitureColorChange: (color: ColorValue | null) => void;
   onFurnitureTypeChange: (type: string) => void;
   loadedAssets?: LoadedAssetData;
+  activePetTypes: number[];
+  petCount: number;
+  onPetToggle: (petType: number, active: boolean) => void;
 }
 
 const THUMB_ZOOM = 2;
@@ -58,6 +67,9 @@ export function EditorToolbar({
   onSelectedFurnitureColorChange,
   onFurnitureTypeChange,
   loadedAssets,
+  activePetTypes,
+  petCount,
+  onPetToggle,
 }: EditorToolbarProps) {
   const [activeCategory, setActiveCategory] = useState<FurnitureCategory>('desks');
   const [showColor, setShowColor] = useState(false);
@@ -105,6 +117,7 @@ export function EditorToolbar({
   const isEraseActive = activeTool === EditTool.ERASE;
   const isFurnitureActive =
     activeTool === EditTool.FURNITURE_PLACE || activeTool === EditTool.FURNITURE_PICK;
+  const isPetsActive = activeTool === EditTool.PETS;
 
   return (
     <div className="absolute bottom-76 left-10 z-10 pixel-panel p-4 flex flex-col-reverse gap-4 max-w-[calc(100vw-20px)]">
@@ -141,6 +154,14 @@ export function EditorToolbar({
           title="Erase tiles to void"
         >
           Erase
+        </Button>
+        <Button
+          variant={isPetsActive ? 'active' : 'default'}
+          size="md"
+          onClick={() => onToolChange(EditTool.PETS)}
+          title="Place pets"
+        >
+          Pets
         </Button>
       </div>
 
@@ -244,6 +265,42 @@ export function EditorToolbar({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sub-panel: Pets — thumbnail grid above tool row */}
+      {isPetsActive && petCount > 0 && (
+        <div className="flex flex-col-reverse gap-4">
+          <div className="carousel" data-testid="pets-carousel">
+            {Array.from({ length: petCount }, (_, i) => {
+              const sprites = getPetSprites(i);
+              const isActive = activePetTypes.includes(i);
+              return (
+                <ItemSelect
+                  key={i}
+                  width={32}
+                  height={64}
+                  selected={isActive}
+                  onClick={() => onPetToggle(i, !isActive)}
+                  title={getPetName(i)}
+                  deps={[i, isActive]}
+                  draw={(ctx, w, h) => {
+                    if (!sprites) {
+                      ctx.fillStyle = EMPTY_SPRITE_THUMBNAIL_BG;
+                      ctx.fillRect(0, 0, w, h);
+                      return;
+                    }
+                    const cached = getCachedSprite(sprites.idleDown[0], PET_THUMB_ZOOM);
+                    const scale =
+                      Math.min(w / cached.width, h / cached.height) * PET_THUMB_SCALE_MARGIN;
+                    const dw = cached.width * scale;
+                    const dh = cached.height * scale;
+                    ctx.drawImage(cached, (w - dw) / 2, (h - dh) / 2, dw, dh);
+                  }}
+                />
+              );
+            })}
+          </div>
         </div>
       )}
 

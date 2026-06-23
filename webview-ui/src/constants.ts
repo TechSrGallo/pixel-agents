@@ -148,3 +148,41 @@ export const FUEL_COLOR_CRITICAL = '#ff2222';
 export const FUEL_GAUGE_BG = '#222';
 export const TEAM_LEAD_COLOR = '#ffd700';
 export const TEAM_ROLE_COLOR = '#66aaff';
+
+// ── Pets ────────────────────────────────────────────────────────
+/** Walking speed in world pixels per second (matches character walk speed visually but slower). */
+export const PET_WALK_SPEED_PX_PER_SEC = 32;
+/** Time per WALK animation cycle step (4 cycle steps × 0.15s = 0.6s per loop). */
+export const PET_WALK_FRAME_DURATION_SEC = 0.15;
+/** Time per IDLE animation cycle step (4 cycle steps × 0.3s = 1.2s per loop). */
+export const PET_IDLE_FRAME_DURATION_SEC = 0.3;
+/** Walk cycle: 4-step lookup into the 3-frame walkDown/walkUp/walkRight arrays. */
+export const PET_WALK_SEQUENCE = [0, 1, 0, 2] as const;
+/** Idle cycle: 4-step lookup into the 3-frame idleDown/idleUp arrays. */
+export const PET_IDLE_SEQUENCE = [0, 1, 2, 1] as const;
+/** Minimum seconds the pet stays in IDLE before making a new decision. */
+export const PET_WANDER_PAUSE_MIN_SEC = 3.0;
+/** Maximum seconds the pet stays in IDLE before making a new decision. */
+export const PET_WANDER_PAUSE_MAX_SEC = 15.0;
+/** Seconds between FOLLOW path re-computations. */
+export const PET_FOLLOW_RECALC_INTERVAL_SEC = 1.0;
+/** Probability that a pet enters FOLLOW (instead of WALK) when wanderTimer expires. */
+export const PET_FOLLOW_CHANCE = 0.3;
+/** Maximum Manhattan distance (tiles) at which a character can become a follow target. */
+export const PET_FOLLOW_RADIUS_TILES = 3;
+/** Minimum seconds a FOLLOW episode lasts before timing out. */
+export const PET_FOLLOW_DURATION_MIN_SEC = 5.0;
+/** Maximum seconds a FOLLOW episode lasts before timing out. */
+export const PET_FOLLOW_DURATION_MAX_SEC = 15.0;
+/** Hit-box half-width (world px) for pet click detection. */
+export const PET_HIT_HALF_WIDTH = 8;
+/** Hit-box height (world px) measured upward from the bottom-center anchor. */
+export const PET_HIT_HEIGHT = 16;
+/** Zoom factor used to draw pet thumbnails in the EditorToolbar Pets tab. */
+export const PET_THUMB_ZOOM = 2;
+/** Scale margin so the pet thumbnail fills the ItemSelect cell without touching the edges. */
+export const PET_THUMB_SCALE_MARGIN = 0.85;
+/** Fallback background fill for sprite-less thumbnail (used while pet sprites are loading). */
+export const EMPTY_SPRITE_THUMBNAIL_BG = '#333';
+/** Maximum string length for a PlacedPet.id (defends against pathologically-long layout entries). */
+export const MAX_PET_ID_LENGTH = 128;

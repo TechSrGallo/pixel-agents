@@ -17,6 +17,7 @@ import {
   loadDefaultLayout,
   loadFloorTiles,
   loadFurnitureAssets,
+  loadPetSprites,
   loadWallTiles,
 } from './assetLoader.js';
 import type { AssetCache } from './clientMessageHandler.js';
@@ -66,15 +67,17 @@ async function main(): Promise<void> {
   console.log('[Pixel Agents] Loading assets...');
   const assetCache: AssetCache = {
     characters: await loadCharacterSprites(distRoot),
+    pets: await loadPetSprites(distRoot),
     floorTiles: await loadFloorTiles(distRoot).then((t) => t?.sprites ?? null),
     wallTiles: await loadWallTiles(distRoot).then((t) => t?.sets ?? null),
     furniture: await loadFurnitureAssets(distRoot),
     defaultLayout: loadDefaultLayout(distRoot),
   };
   const charCount = assetCache.characters?.characters.length ?? 0;
+  const petCount = assetCache.pets?.pets.length ?? 0;
   const furnitureCount = assetCache.furniture?.catalog.length ?? 0;
   console.log(
-    `[Pixel Agents] Assets loaded: ${charCount} characters, ${furnitureCount} furniture items`,
+    `[Pixel Agents] Assets loaded: ${charCount} characters, ${petCount} pets, ${furnitureCount} furniture items`,
   );
 
   // ── Store + adapter (shared settings + standalone-scoped agents/seats) ──

@@ -6,19 +6,27 @@ import * as vscode from 'vscode';
 import type { StateAdapter } from '../../core/src/adapter.js';
 import { AgentRuntime } from '../../server/src/agentRuntime.js';
 import { AgentStateStore } from '../../server/src/agentStateStore.js';
-import type { LoadedAssets, LoadedCharacterSprites } from '../../server/src/assetLoader.js';
+import type {
+  LoadedAssets,
+  LoadedCharacterSprites,
+  LoadedPetSprites,
+} from '../../server/src/assetLoader.js';
 import {
   loadCharacterSprites,
   loadDefaultLayout,
   loadExternalCharacterSprites,
+  loadExternalPetSprites,
   loadFloorTiles,
   loadFurnitureAssets,
+  loadPetSprites,
   loadWallTiles,
   mergeCharacterSprites,
   mergeLoadedAssets,
+  mergePetSprites,
   sendAssetsToWebview,
   sendCharacterSpritesToWebview,
   sendFloorTilesToWebview,
+  sendPetSpritesToWebview,
   sendWallTilesToWebview,
 } from '../../server/src/assetLoader.js';
 import { readConfig, writeConfig } from '../../server/src/configPersistence.js';
@@ -491,6 +499,15 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
               sendCharacterSpritesToWebview(this.webview, charSprites);
             }
 
+            // Load pet sprites (bundled + external)
+            const petSprites = await this.loadAllPetSprites();
+            if (petSprites && this.webview) {
+              console.log(
+                `[Extension] ${petSprites.pets.length} pet sprites loaded, sending to webview`,
+              );
+              sendPetSpritesToWebview(this.webview, petSprites);
+            }
+
             // Load floor tiles
             const floorTiles = await loadFloorTiles(assetsRoot);
             if (floorTiles && this.webview) {
@@ -583,6 +600,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
           writeConfig(cfg);
         }
         await this.reloadAndSendCharacters();
+        await this.reloadAndSendPets();
         await this.reloadAndSendFurniture();
         this.webview?.postMessage({
           type: 'externalAssetDirectoriesUpdated',
@@ -595,6 +613,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
         );
         writeConfig(cfg);
         await this.reloadAndSendCharacters();
+        await this.reloadAndSendPets();
         await this.reloadAndSendFurniture();
         this.webview?.postMessage({
           type: 'externalAssetDirectoriesUpdated',
@@ -717,6 +736,20 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
     return chars;
   }
 
+  private async loadAllPetSprites(): Promise<LoadedPetSprites | null> {
+    if (!this.assetsRoot) return null;
+    let pets = await loadPetSprites(this.assetsRoot);
+    const config = readConfig();
+    for (const extraDir of config.externalAssetDirectories) {
+      console.log('[Extension] Loading external pet sprites from:', extraDir);
+      const extra = await loadExternalPetSprites(extraDir);
+      if (extra) {
+        pets = pets ? mergePetSprites(pets, extra) : extra;
+      }
+    }
+    return pets;
+  }
+
   private async reloadAndSendFurniture(): Promise<void> {
     if (!this.assetsRoot || !this.webview) return;
     try {
@@ -738,6 +771,18 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
       }
     } catch (err) {
       console.error('[Extension] Error reloading character sprites:', err);
+    }
+  }
+
+  private async reloadAndSendPets(): Promise<void> {
+    if (!this.assetsRoot || !this.webview) return;
+    try {
+      const pets = await this.loadAllPetSprites();
+      if (pets) {
+        sendPetSpritesToWebview(this.webview, pets);
+      }
+    } catch (err) {
+      console.error('[Extension] Error reloading pet sprites:', err);
     }
   }
 

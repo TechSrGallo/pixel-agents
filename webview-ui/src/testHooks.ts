@@ -5,6 +5,16 @@ declare global {
     __pixelAgentsTestHooks?: {
       playedSounds?: Array<{ kind: string; at: number }>;
       getCharacters?: () => Array<{ id: number; matrixEffect: 'spawn' | 'despawn' | null }>;
+      getPets?: () => Array<{
+        id: string;
+        name: string;
+        petType: number;
+        state: 'idle' | 'walk' | 'follow';
+        x: number;
+        y: number;
+        bubbleType: 'heart' | null;
+      }>;
+      petClick?: (petId: string) => void;
       addAgentLog?: Array<{
         id: number;
         skipSpawnEffect: boolean | undefined;
@@ -61,6 +71,39 @@ export function installTestHooks(officeStateRef: { current: OfficeState | null }
   hooks.selectAgent = (id) => {
     const os = officeStateRef.current;
     if (os) os.selectedAgentId = id;
+  };
+
+  // Point-in-time snapshot of every live pet. Pets render only on the canvas
+  // (no DOM) and the heart bubble is never persisted, so e2e reads pet state
+  // through here — the same rationale as getCharacters() above.
+  hooks.getPets = () => {
+    const os = officeStateRef.current;
+    if (!os) return [];
+    return os.pets.map((pet) => ({
+      id: pet.id,
+      name: pet.name,
+      petType: pet.petType,
+      state: pet.state,
+      x: pet.x,
+      y: pet.y,
+      bubbleType: pet.bubbleType,
+    }));
+  };
+
+  // Drive the same state a canvas click on a pet produces (toggle the heart
+  // bubble). Mirrors OfficeCanvas's pet-hit branch but takes a known petId
+  // instead of a hit-test result, so tests don't pixel-hunt the randomly
+  // spawned sprite — the same tradeoff selectAgent makes for characters.
+  hooks.petClick = (petId) => {
+    const os = officeStateRef.current;
+    if (!os) return;
+    const pet = os.pets.find((p) => p.id === petId);
+    if (!pet) return;
+    if (pet.bubbleType) {
+      os.dismissPetBubble(petId);
+    } else {
+      os.showPetBubble(petId);
+    }
   };
 
   const origAddAgent = OfficeState.prototype.addAgent;

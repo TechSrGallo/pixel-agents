@@ -12,6 +12,7 @@ const AREA_TO_EPIC: Record<string, string> = {
   teams: 'Teams routing',
   matrix: 'Hooks-off matrix',
   standalone: 'Standalone server',
+  pets: 'Pet system',
 };
 
 /**

@@ -83,6 +83,7 @@ export const EditTool = {
   SELECT: 'select',
   EYEDROPPER: 'eyedropper',
   ERASE: 'erase',
+  PETS: 'pets',
 } as const;
 export type EditTool = (typeof EditTool)[keyof typeof EditTool];
 
@@ -125,6 +126,8 @@ export interface OfficeLayout {
   tileColors?: Array<ColorValue | null>;
   /** Bumped when the bundled default layout changes; forces a reset on existing installs */
   layoutRevision?: number;
+  /** Pets placed in the office. Optional for backward-compat; migrateLayout coerces to []. */
+  pets?: PlacedPet[];
 }
 
 export interface Character {
@@ -201,4 +204,54 @@ export interface Character {
   inputTokens: number;
   /** Cumulative output tokens consumed */
   outputTokens: number;
+}
+
+export const PetState = { IDLE: 'idle', WALK: 'walk', FOLLOW: 'follow' } as const;
+export type PetState = (typeof PetState)[keyof typeof PetState];
+
+/** Runtime pet (mutated by FSM tick). */
+export interface Pet {
+  /** Stable identifier; matches PlacedPet.id in the layout. */
+  id: string;
+  /** Display name from sprite manifest (e.g. "Claudio", "Gitcat"). */
+  name: string;
+  /** Index into the loaded PetSpriteFrames[] array. */
+  petType: number;
+  state: PetState;
+  dir: Direction;
+  /** Pixel position (bottom-center anchor). */
+  x: number;
+  y: number;
+  /** Current tile column / row (integer). */
+  tileCol: number;
+  tileRow: number;
+  /** Remaining path steps (tile coords). */
+  path: Array<{ col: number; row: number }>;
+  /** 0..1 lerp progress between current tile and next tile. */
+  moveProgress: number;
+  /** Animation cycle index 0..3. */
+  frame: number;
+  frameTimer: number;
+  /** Countdown for next IDLE→WALK/FOLLOW decision. */
+  wanderTimer: number;
+  /** ID of the character being followed, or null. */
+  followTargetId: number | null;
+  /** Countdown until next path re-computation while following. */
+  followRecalcTimer: number;
+  /** Time spent in current FOLLOW episode. */
+  followDuration: number;
+  /** Random [5, 15] limit; FOLLOW exits when followDuration >= this. */
+  followDurationLimit: number;
+  /** Pet's heart-bubble overlay (set on click), or null. */
+  bubbleType: 'heart' | null;
+  /** Countdown timer for the heart bubble (mirrors character waiting bubble). */
+  bubbleTimer: number;
+}
+
+/** Persisted record (lives on OfficeLayout). */
+export interface PlacedPet {
+  /** crypto.randomUUID() generated when first toggled on. */
+  id: string;
+  /** Index into the loaded pet sprite array. */
+  petType: number;
 }

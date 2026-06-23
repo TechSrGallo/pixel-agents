@@ -45,3 +45,8 @@ agent-orchestrator.yaml
 !/docs/e2e-claude-mocking.md
 
 .playwright-mcp/
+
+# Agent-orchestrator / tooling scaffolding
+.ao/
+.serena/
+tasks/

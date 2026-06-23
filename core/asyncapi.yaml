@@ -104,6 +104,7 @@ components:
         # Assets
         - $ref: '#/components/schemas/FurnitureAssetsLoaded'
         - $ref: '#/components/schemas/CharacterSpritesLoaded'
+        - $ref: '#/components/schemas/PetSpritesLoaded'
         - $ref: '#/components/schemas/FloorTilesLoaded'
         - $ref: '#/components/schemas/WallTilesLoaded'
         # Settings & config
@@ -469,6 +470,77 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CharacterSpriteSet'
+
+    PetSpritesLoaded:
+      description: Pet sprite frame sets and display names, sent once after webviewReady (between characterSpritesLoaded and floorTilesLoaded).
+      type: object
+      additionalProperties: false
+      required: [type, pets, petNames]
+      properties:
+        type:
+          const: petSpritesLoaded
+        pets:
+          type: array
+          description: One frame-set per loaded pet, indexed by petType.
+          items:
+            $ref: '#/components/schemas/PetSpriteFrameSet'
+        petNames:
+          type: array
+          description: Display names parallel-indexed to `pets` (sourced from each pet's manifest.json).
+          items:
+            type: string
+
+    PetSpriteFrameSet:
+      description: One pet's frames keyed by direction + state. All arrays are 3D hex-string arrays (frames × rows × pixels).
+      type: object
+      additionalProperties: false
+      required: [walkDown, idleDown, walkUp, idleUp, walkRight]
+      properties:
+        walkDown:
+          type: array
+          description: 3 frames at 16×32 pixels.
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: string
+        idleDown:
+          type: array
+          description: 3 frames at 16×32 pixels.
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: string
+        walkUp:
+          type: array
+          description: 3 frames at 16×32 pixels.
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: string
+        idleUp:
+          type: array
+          description: 3 frames at 16×32 pixels.
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: string
+        walkRight:
+          type: array
+          description: 3 frames at 32×32 pixels.
+          items:
+            type: array
+            items:
+              type: array
+              items:
+                type: string
 
     FloorTilesLoaded:
       description: Floor tile sprites (7 patterns).
