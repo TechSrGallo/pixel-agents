@@ -13,3 +13,5 @@
 
 export { claudeProvider } from './hook/claude/claude.js';
 export { copyHookScript } from './hook/claude/claudeHookInstaller.js';
+export { sseProvider } from './hook/sse/sse.js';
+export { startSseBridge } from './hook/sse/sseBridge.js';

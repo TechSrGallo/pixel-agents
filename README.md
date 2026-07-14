@@ -80,6 +80,16 @@ node dist/cli.js                 # or npx pixel-agents [--port 3100] after publi
 
 It starts the Fastify server, opens the webview SPA at `http://localhost:3100`, and (in the same `~/.pixel-agents/` namespace) shares your hooks and layout with the VS Code extension if both are running.
 
+### Connect your own agents (SSE provider)
+
+The standalone CLI isn't limited to Claude Code. If your agent platform emits lifecycle events over Server-Sent Events, Pixel Agents can visualize those agents in the same office:
+
+```bash
+node dist/cli.js --provider sse --sse-url http://localhost:8080/events [--sse-token <token>]
+```
+
+Try it without a real upstream using the bundled mock (`node scripts/mock-sse-server.mjs`). See [docs/sse-provider.md](docs/sse-provider.md) for the event vocabulary, status mappings, reconnect/replay behavior, and configuration via environment variables.
+
 ### Browser Preview & Hosted Reports
 
 The browser-preview version of the webview can be built and staged for Vercel separately from the VS Code extension build.

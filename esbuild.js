@@ -127,7 +127,7 @@ async function buildCli() {
     logLevel: 'silent',
   });
   if (!production) {
-    console.log('[build] CLI bundled: dist/cli.mjs');
+    console.log('[build] CLI bundled: dist/cli.js');
   }
 }
 

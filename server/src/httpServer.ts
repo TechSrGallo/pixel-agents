@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import Fastify from 'fastify';
 
+import type { HookProvider } from '../../core/src/provider.js';
 import type { AgentRuntime } from './agentRuntime.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import type { AssetCache, SetHooksEnabledSideEffect } from './clientMessageHandler.js';
@@ -34,6 +35,8 @@ export interface HttpServerOptions {
   onHookEvent?: (providerId: string, event: Record<string, unknown>) => void;
   /** Invoked when setHooksEnabled is toggled via WebSocket. Standalone installs/uninstalls hooks here. */
   onSetHooksEnabled?: SetHooksEnabledSideEffect;
+  /** Active provider, forwarded to handleClientMessage for providerCapabilities. */
+  provider?: HookProvider;
 }
 
 /** Result of createHttpServer(). */
@@ -188,6 +191,7 @@ function registerWebSocketRoute(app: FastifyInstance, options: HttpServerOptions
           runtime: options.runtime,
           cache: options.assetCache ?? null,
           onSetHooksEnabled: options.onSetHooksEnabled,
+          provider: options.provider,
         });
       } catch {
         // Malformed JSON, ignore

@@ -22,7 +22,8 @@ import {
 } from './assetLoader.js';
 import type { AssetCache } from './clientMessageHandler.js';
 import { FileStateAdapter } from './fileStateAdapter.js';
-import { claudeProvider, copyHookScript } from './providers/index.js';
+import type { SseBridgeHandle } from './providers/hook/sse/sseBridge.js';
+import { claudeProvider, copyHookScript, sseProvider, startSseBridge } from './providers/index.js';
 import { PixelAgentsServer } from './server.js';
 
 // ── Argument parsing ──────────────────────────────────────────
@@ -30,10 +31,22 @@ import { PixelAgentsServer } from './server.js';
 interface CliArgs {
   port: number;
   host: string;
+  /** Active provider id: 'claude' (default) or 'sse'. */
+  provider: string;
+  /** Upstream SSE endpoint (provider=sse). */
+  sseUrl?: string;
+  /** Optional bearer token for the upstream SSE endpoint. */
+  sseToken?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { port: 3100, host: '127.0.0.1' };
+  const args: CliArgs = {
+    port: 3100,
+    host: '127.0.0.1',
+    provider: process.env.PIXEL_AGENTS_PROVIDER ?? '',
+    sseUrl: process.env.PIXEL_AGENTS_SSE_URL,
+    sseToken: process.env.PIXEL_AGENTS_SSE_TOKEN,
+  };
   for (let i = 0; i < argv.length; i++) {
     if ((argv[i] === '--port' || argv[i] === '-p') && argv[i + 1]) {
       args.port = parseInt(argv[i + 1], 10);
@@ -41,15 +54,44 @@ function parseArgs(argv: string[]): CliArgs {
     } else if (argv[i] === '--host' && argv[i + 1]) {
       args.host = argv[i + 1];
       i++;
+    } else if (argv[i] === '--provider' && argv[i + 1]) {
+      args.provider = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--sse-url' && argv[i + 1]) {
+      args.sseUrl = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--sse-token' && argv[i + 1]) {
+      args.sseToken = argv[i + 1];
+      i++;
     } else if (argv[i] === '--help') {
       console.log(`Usage: pixel-agents [options]
 
 Options:
   --port, -p <number>   Port to listen on (default: 3100)
   --host <string>       Host to bind to (default: 127.0.0.1)
-  --help                Show this help message`);
+  --provider <id>       Agent provider: 'claude' (default) or 'sse'
+  --sse-url <url>       Upstream SSE endpoint (implies --provider sse)
+  --sse-token <token>   Bearer token for the upstream SSE endpoint
+  --help                Show this help message
+
+Environment variables:
+  PIXEL_AGENTS_PROVIDER    Same as --provider
+  PIXEL_AGENTS_SSE_URL     Same as --sse-url
+  PIXEL_AGENTS_SSE_TOKEN   Same as --sse-token`);
       process.exit(0);
     }
+  }
+  // --sse-url without an explicit provider implies provider=sse.
+  if (!args.provider) {
+    args.provider = args.sseUrl ? sseProvider.id : claudeProvider.id;
+  }
+  if (args.provider !== claudeProvider.id && args.provider !== sseProvider.id) {
+    console.error(`Unknown provider "${args.provider}" (expected 'claude' or 'sse')`);
+    process.exit(1);
+  }
+  if (args.provider === sseProvider.id && !args.sseUrl) {
+    console.error('Provider "sse" requires --sse-url <url> (or PIXEL_AGENTS_SSE_URL)');
+    process.exit(1);
   }
   return args;
 }
@@ -85,12 +127,16 @@ async function main(): Promise<void> {
   const adapter = new FileStateAdapter({ namespace: 'standalone' });
   store.setAdapter(adapter);
 
+  // ── Provider selection (claude by default, sse for external agent systems) ──
+  const provider = args.provider === sseProvider.id ? sseProvider : claudeProvider;
+  const isClaude = provider.id === claudeProvider.id;
+
   // ── Create server ──
   const server = new PixelAgentsServer();
 
   try {
     // Create runtime first (before server.start, so we can pass it in)
-    const runtime = new AgentRuntime(store, claudeProvider);
+    const runtime = new AgentRuntime(store, provider);
 
     // Wire hook events: HTTP POST -> runtime -> hookEventHandler -> agents
     server.onHookEvent((providerId, event) => {
@@ -99,18 +145,16 @@ async function main(): Promise<void> {
 
     // onSetHooksEnabled side effect: install/uninstall hooks when user toggles in UI.
     // Captures config from the outer scope after server.start().
+    // No-op for push providers (sse): installHooks resolves without side effects.
     let currentConfig: { port: number; token: string } | null = null;
     const onSetHooksEnabled = async (enabled: boolean): Promise<void> => {
       if (!currentConfig) return;
       if (enabled) {
-        await claudeProvider.installHooks(
-          `http://127.0.0.1:${currentConfig.port}`,
-          currentConfig.token,
-        );
-        copyHookScript(distRoot);
+        await provider.installHooks(`http://127.0.0.1:${currentConfig.port}`, currentConfig.token);
+        if (isClaude) copyHookScript(distRoot);
         console.log('[Pixel Agents] Hooks installed (user toggle)');
       } else {
-        await claudeProvider.uninstallHooks();
+        await provider.uninstallHooks();
         console.log('[Pixel Agents] Hooks uninstalled (user toggle)');
       }
     };
@@ -124,6 +168,7 @@ async function main(): Promise<void> {
       staticDir,
       assetCache,
       onSetHooksEnabled,
+      provider,
     });
     currentConfig = { port: config.port, token: config.token };
 
@@ -131,10 +176,11 @@ async function main(): Promise<void> {
     runtime.hooksEnabled.current = adapter.getSetting('pixel-agents.hooksEnabled', true);
     runtime.watchAllSessions.current = adapter.getSetting('pixel-agents.watchAllSessions', false);
 
-    // Install hooks on startup if the persisted setting says so
-    if (runtime.hooksEnabled.current) {
+    // Install hooks on startup if the persisted setting says so (claude only;
+    // sse installHooks is a no-op and needs no hook script)
+    if (runtime.hooksEnabled.current && isClaude) {
       try {
-        await claudeProvider.installHooks(`http://127.0.0.1:${config.port}`, config.token);
+        await provider.installHooks(`http://127.0.0.1:${config.port}`, config.token);
         copyHookScript(distRoot);
         console.log('[Pixel Agents] Hooks installed');
       } catch (err) {
@@ -142,9 +188,10 @@ async function main(): Promise<void> {
       }
     }
 
-    // Start scanning for external sessions (Claude running in user's terminal)
+    // Start scanning for external sessions (Claude running in user's terminal).
+    // Push providers (sse) have no session dirs, so scanning is skipped for them.
     const cwd = process.cwd();
-    const dirs = claudeProvider.getSessionDirs?.(cwd);
+    const dirs = provider.getSessionDirs?.(cwd);
     if (dirs && dirs[0]) {
       const projectDir = dirs[0];
       console.log(`[Pixel Agents] Scanning project dir: ${projectDir}`);
@@ -153,11 +200,21 @@ async function main(): Promise<void> {
       runtime.startStaleCheck();
     }
 
+    // ── SSE bridge: pump the upstream event stream into the runtime ──
+    let sseBridge: SseBridgeHandle | null = null;
+    if (provider.id === sseProvider.id && args.sseUrl) {
+      console.log(`[Pixel Agents] SSE: bridging ${args.sseUrl}`);
+      sseBridge = startSseBridge({ url: args.sseUrl, token: args.sseToken }, (raw) =>
+        runtime.handleHookEvent(sseProvider.id, raw),
+      );
+    }
+
     console.log(`\n  Pixel Agents server running at http://${args.host}:${config.port}\n`);
 
     // ── Graceful shutdown ──
     function shutdown(): void {
       console.log('\nShutting down...');
+      sseBridge?.stop();
       runtime.dispose();
       server.stop();
       process.exit(0);

@@ -36,6 +36,7 @@ interface SessionLifecycleCallbacks {
     sessionId: string,
     transcriptPath: string | undefined,
     cwd: string,
+    agentName?: string,
   ) => void;
   /** Called when /clear is detected via hooks (SessionEnd reason=clear + SessionStart source=clear). */
   onSessionClear?: (
@@ -92,6 +93,7 @@ export class HookEventHandler {
 
   /** Check if a session is tracked (in workspace project dir, or Watch All Sessions ON). */
   private isTrackedSession(transcriptPath?: string, cwd?: string): boolean {
+    if (this.provider.adoptAllSessions) return true;
     if (this.watchAllSessionsRef?.current) return true;
     const projectDir = transcriptPath ? path.dirname(transcriptPath) : cwd;
     if (!projectDir) return false;
@@ -241,6 +243,7 @@ export class HookEventHandler {
           sessionId: event.session_id,
           transcriptPath,
           cwd: cwd ?? '',
+          agentName: normEvent.agentName,
         });
       } else {
         if (debug && tracked)
@@ -273,6 +276,7 @@ export class HookEventHandler {
         pending.sessionId,
         pending.transcriptPath,
         pending.cwd,
+        pending.agentName,
       );
       // Re-process this event now that the agent exists
       this.handleEvent(_providerId, event);

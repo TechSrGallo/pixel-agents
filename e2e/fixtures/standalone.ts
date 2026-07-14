@@ -4,9 +4,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { applyAllureLabels } from '../helpers/allure-labels';
+import { type SseUpstream, startSseUpstream } from '../helpers/sse-upstream';
 import { launchStandalone, type StandaloneSession } from '../helpers/standalone';
 
-export interface StandaloneContext extends StandaloneSession {}
+export interface StandaloneContext extends StandaloneSession {
+  /** Controllable SSE upstream; present when launched with provider 'sse'. */
+  sseUpstream?: SseUpstream;
+}
+
+export interface StandaloneLaunchOptions {
+  /**
+   * 'claude' (default) spawns the bare CLI. 'sse' starts a controllable SSE
+   * upstream first and spawns the CLI with --provider sse --sse-url pointed
+   * at it; tests drive the office by pushing events through `sseUpstream`.
+   */
+  provider: 'claude' | 'sse';
+}
 
 async function attachTextFileIfExists(
   testInfo: TestInfo,
@@ -42,7 +55,14 @@ async function attachText(
   }
 }
 
-export const test = base.extend<{ standalone: StandaloneContext; _allureLabels: void }>({
+export const test = base.extend<{
+  standalone: StandaloneContext;
+  standaloneLaunch: StandaloneLaunchOptions;
+  _allureLabels: void;
+}>({
+  // Option fixture: specs opt into SSE mode with
+  //   test.use({ standaloneLaunch: { provider: 'sse' } });
+  standaloneLaunch: [{ provider: 'claude' }, { option: true }],
   // Auto-fixture: tag every test with Allure epic + feature derived from its
   // @area: annotation and enclosing describe path. Runs before standalone.
   _allureLabels: [
@@ -52,8 +72,18 @@ export const test = base.extend<{ standalone: StandaloneContext; _allureLabels: 
     },
     { auto: true },
   ],
-  standalone: async ({ page }, use, testInfo) => {
-    const standalone = await launchStandalone(page);
+  standalone: async ({ page, standaloneLaunch }, use, testInfo) => {
+    const sseUpstream = standaloneLaunch.provider === 'sse' ? await startSseUpstream() : null;
+    let standalone: StandaloneContext;
+    try {
+      const session = await launchStandalone(page, {
+        extraCliArgs: sseUpstream ? ['--provider', 'sse', '--sse-url', sseUpstream.url] : [],
+      });
+      standalone = sseUpstream ? { ...session, sseUpstream } : session;
+    } catch (error) {
+      await sseUpstream?.close();
+      throw error;
+    }
 
     try {
       await use(standalone);
@@ -78,6 +108,7 @@ export const test = base.extend<{ standalone: StandaloneContext; _allureLabels: 
       }
 
       await standalone.cleanup();
+      await sseUpstream?.close();
     }
   },
 });

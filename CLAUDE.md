@@ -28,6 +28,13 @@ server/                              Lifecycle runtime + Fastify HTTP/WS server
       claudeHookInstaller.ts         Atomic install/uninstall in ~/.claude/settings.json
       constants.ts                   Claude hook event names, script path
       hooks/claude-hook.ts           Hook script (CJS+shebang, bundled to dist/hooks/claude-hook.js)
+    providers/hook/sse/              Push provider: external agent systems over Server-Sent Events
+      sse.ts                         sseProvider (HookProvider, installer no-ops, adoptAllSessions)
+      types.ts                       Upstream wire types (agent.session.started, agent.status.changed, …)
+      constants.ts                   Upstream event names, backoff/idle tuning, status→tool map
+      normalizeSseEvent.ts           Upstream event → canonical AgentEvent + routingSessionKey
+      sseClient.ts                   SseParser (incremental, pure) + SseStreamClient (fetch, backoff, Last-Event-ID)
+      sseBridge.ts                   createSseEventPump (validation, mid-stream adoption, tool tracking) + startSseBridge
     providers/index.ts               Provider registry
     agentRuntime.ts                  Lifecycle core: timers, scanners, HookEventHandler, SessionRouter, DismissalTracker
     agentStateStore.ts               EventEmitter-backed single source of truth (typed mutations + events)
@@ -37,7 +44,7 @@ server/                              Lifecycle runtime + Fastify HTTP/WS server
     httpServer.ts                    Fastify: POST /api/hooks/:providerId, GET /api/health, GET /ws, SPA (standalone)
     clientMessageHandler.ts          Single dispatch point for ClientMessage from webview
     server.ts                        Top-level composition
-    cli.ts                           npx pixel-agents entry (npm bin)
+    cli.ts                           npx pixel-agents entry (npm bin); --provider claude|sse, --sse-url, --sse-token
     fileStateAdapter.ts              Namespaced ~/.pixel-agents/ persistence
     configPersistence.ts             { vscode, standalone, externalAssetDirectories }
     layoutPersistence.ts             ~/.pixel-agents/layout.json with atomic tmp+rename
@@ -123,6 +130,7 @@ e2e/                                 Playwright suite (real VS Code + mock-claud
     webview.ts                       Settings/modal helpers
     hooks.ts                         Hook server lifecycle helpers
     standalone.ts                    Standalone server + WebSocket browser helpers
+    sse-upstream.ts                  Controllable SSE upstream for --provider sse specs
     internal-agent.ts                spawnInternalAgentAndWait
     lifecycle.ts                     Reusable scenario fragments
     team.ts                          Team config seeding + teammate helpers
@@ -130,7 +138,7 @@ e2e/                                 Playwright suite (real VS Code + mock-claud
   tests/
     claude/hooks-on/                 basic.spec.ts, lifecycle.spec.ts, teams.spec.ts
     claude/hooks-off/                lifecycle.spec.ts, matrix.spec.ts
-    standalone/                      hooks.spec.ts
+    standalone/                      hooks.spec.ts, sse.spec.ts
   README.md                          Auto-generated test inventory (regen via npm run e2e:inventory)
 
 scripts/
@@ -139,6 +147,8 @@ scripts/
   generate-e2e-inventory.mjs         Splices test list into e2e/README.md (CI drift check)
   build-allure-report.mjs            Combine e2e+server+webview Allure results
   assemble-vercel-output.mjs         Stage /reports/allure/ for Vercel deploy
+  mock-sse-server.mjs                Mock SSE upstream for manual --provider sse testing
+  mi-cli-ia-sse-adapter.mjs          SSE→SSE proxy: mi-cli-ia hub dialect → agent.* vocabulary
   asset-manager.html                 Unified furniture editor (positions + metadata)
   jsonl-viewer.html                  Standalone JSONL transcript inspector
   wall-tile-editor.html              Wall sprite editor
@@ -213,13 +223,18 @@ export type TransportState = 'connecting' | 'connected' | 'reconnecting' | 'disc
 
 ## Provider Abstraction
 
-`HookProvider` (`core/src/provider.ts`) is the integration boundary. Today only Claude Code is implemented. The interface:
+`HookProvider` (`core/src/provider.ts`) is the integration boundary. Two implementations ship today: **claude** (reference, hooks + JSONL fallback) and **sse** (push provider for external agent systems). The interface:
 
 - **Required**: `normalizeHookEvent(raw)` → `{ sessionId, event: AgentEvent } | null`; `installHooks` / `uninstallHooks` / `areHooksInstalled`; `formatToolStatus`; `permissionExemptTools`, `subagentToolNames`, `readingTools` sets.
 - **Optional file fallback**: `getSessionDirs(workspace)`, `getAllSessionRoots()`, `sessionFilePattern`, `parseTranscriptLine(line)`, `buildLaunchCommand(sessionId, cwd, opts)`. Used when hooks aren't installed.
 - **Optional team extension**: `team?: TeamProvider` for Lead + Teammates support.
+- **Optional adoption gate bypass**: `adoptAllSessions?: boolean`. Push providers (sse) set it: their sessions come from an explicitly configured upstream, so the workspace project-dir gate and "Watch All Sessions" setting are skipped. `AgentEvent.sessionStart` also carries an optional `agentName` so pushed agents keep their upstream display name.
 
 `AgentEvent.kind` values: `toolStart`, `toolEnd`, `turnEnd`, `subagentStart`, `subagentEnd`, `subagentTurnEnd`, `progress`, `permissionRequest`, `sessionStart`, `sessionEnd`. The runtime dispatches on `kind`, never on CLI-specific tool names.
+
+### SSE provider (external agent systems)
+
+`server/src/providers/hook/sse/` is a stream provider: the standalone CLI (`--provider sse --sse-url <url> [--sse-token <t>]`, or `PIXEL_AGENTS_PROVIDER/PIXEL_AGENTS_SSE_URL/PIXEL_AGENTS_SSE_TOKEN`) connects to an upstream SSE endpoint and pumps events into the same `AgentRuntime`. Upstream vocabulary: `agent.session.started/completed/ended`, `agent.status.changed`, `agent.tool.started/completed`, `agent.permission.requested`, `agent.message`. Routing key = `agent_id:session_id`. The pump validates JSON, auto-adopts sessions seen mid-stream, keeps one open hook-tool per session, and emits a synthetic confirm right after sessionStart (the dispatcher requires a follow-up event before creating pending external agents). `SseStreamClient` reconnects with 1s→30s backoff, honors `retry:`, resends `Last-Event-ID`, and force-reconnects idle streams (90s). Installer methods are no-ops (push-based). Full contract: `docs/sse-provider.md`; manual testing: `scripts/mock-sse-server.mjs`.
 
 ### TeamProvider (Lead + Teammates)
 
@@ -439,7 +454,7 @@ Run: `npm run test:webview`.
 
 ### End-to-end (Playwright)
 
-`e2e/` — Playwright tests against a real VS Code Electron instance + a standalone Fastify server. **47 tests across 6 spec files**, run on CI as a 3-OS x 3-shard matrix (Linux, macOS, Windows; each shard runs ~1/3 of the suite at `--workers=1`).
+`e2e/` — Playwright tests against a real VS Code Electron instance + a standalone Fastify server. **52 tests across 7 spec files**, run on CI as a 3-OS x 3-shard matrix (Linux, macOS, Windows; each shard runs ~1/3 of the suite at `--workers=1`).
 
 | Area (`@area:<tag>`) | Specs                                                                     | What                                                                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -448,7 +463,7 @@ Run: `npm run test:webview`.
 | `cross-cutting`      | spread across both lifecycle files                                        | turn_duration cleanup, permission timer cancellation, sub-agent permission bubble, sound, label persistence, hook install/uninstall, layout editor save round-trip |
 | `teams`              | `claude/hooks-on/teams.spec.ts`                                           | Internal/external lead + tmux/inline teammate routing                                                                                                              |
 | `matrix`             | `claude/hooks-off/matrix.spec.ts`                                         | Heuristic-mode broad coverage                                                                                                                                      |
-| `standalone`         | `standalone/hooks.spec.ts`                                                | npx pixel-agents serves SPA, WebSocket protocol, hook-driven lifecycle in browser                                                                                  |
+| `standalone`         | `standalone/hooks.spec.ts`, `standalone/sse.spec.ts`                      | npx pixel-agents serves SPA, WebSocket protocol, hook-driven lifecycle in browser; --provider sse pushed lifecycle, concurrency, mid-stream adoption               |
 
 **Mock claude**: Tests never invoke real `claude`. A bash script (`e2e/fixtures/mock-claude`) is copied into an isolated `bin/` and prepended to `PATH`. The scenario runner (`mock-claude-runner.cjs`) honors `claudeScenario(...).at(ms).appendJsonl(record).emitHook(event).holdOpenFor(ms).build()` to drive timed JSONL writes and hook events.
 
