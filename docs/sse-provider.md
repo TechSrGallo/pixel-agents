@@ -110,37 +110,6 @@ Note: when POSTing directly you must send the wrapped shape
 yourself (any follow-up event confirms a pending session). The built-in SSE
 bridge does all of this for you, so prefer `--sse-url` when possible.
 
-## Adapting a foreign dialect
-
-If your platform already exposes an SSE stream but with a different
-vocabulary, don't change either side: put a small translating proxy between
-them. `scripts/mi-cli-ia-sse-adapter.mjs` is a complete, dependency-free
-worked example that consumes a task/message/turn-based hub dialect
-(`task.created`, `message.sent`, `turn.token`, … with camelCase ids) and
-re-serves it as the `agent.*` vocabulary above — full runbook in
-[mi-cli-ia.md](mi-cli-ia.md):
-
-```bash
-node scripts/mi-cli-ia-sse-adapter.mjs \
-  --upstream http://127.0.0.1:7088/events --upstream-token <tok> --port 7089  # terminal 1
-node dist/cli.js --provider sse --sse-url http://127.0.0.1:7089/events       # terminal 2
-```
-
-Patterns it demonstrates, reusable for any dialect:
-
-- **Stable characters**: each upstream worker becomes one persistent
-  character keyed by its id (idling between tasks) instead of despawning; an
-  optional synthetic "Hub" character animates orchestrator-level events
-  (`--no-hub` to disable).
-- **Lazy adoption**: the first event that mentions an agent emits
-  `agent.session.started` for it, so mid-stream connects still spawn a cast.
-- **Label hygiene**: streamed `turn.token` chunks are throttled (~1/s),
-  code fences are skipped, and long messages truncated before becoming
-  activity labels.
-- **Own robustness**: upstream reconnect with backoff + `Last-Event-ID`, and
-  a downstream replay ring buffer + session snapshot for fresh clients, so
-  restarts on either side don't lose the office.
-
 ## Implementation map
 
 | File                                                 | Role                                             |
@@ -153,4 +122,3 @@ Patterns it demonstrates, reusable for any dialect:
 | `server/src/providers/hook/sse/sseBridge.ts`         | Event pump (validation, adoption, tool tracking) |
 | `server/src/cli.ts`                                  | `--provider/--sse-url/--sse-token` wiring        |
 | `scripts/mock-sse-server.mjs`                        | Mock upstream for manual testing                 |
-| `scripts/mi-cli-ia-sse-adapter.mjs`                  | Example dialect-translating proxy (mi-cli-ia)    |

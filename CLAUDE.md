@@ -147,8 +147,6 @@ scripts/
   generate-e2e-inventory.mjs         Splices test list into e2e/README.md (CI drift check)
   build-allure-report.mjs            Combine e2e+server+webview Allure results
   assemble-vercel-output.mjs         Stage /reports/allure/ for Vercel deploy
-  mock-sse-server.mjs                Mock SSE upstream for manual --provider sse testing
-  mi-cli-ia-sse-adapter.mjs          SSE→SSE proxy: mi-cli-ia hub dialect → agent.* vocabulary
   asset-manager.html                 Unified furniture editor (positions + metadata)
   jsonl-viewer.html                  Standalone JSONL transcript inspector
   wall-tile-editor.html              Wall sprite editor
