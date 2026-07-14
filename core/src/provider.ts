@@ -59,6 +59,10 @@ export type AgentEvent =
       /** Working directory the session was started in. Used to match pending
        *  external sessions against known workspace folders. */
       cwd?: string;
+      /** Display name for the agent (e.g. "Backend Engineer"). Providers whose
+       *  upstream events carry agent names (push/stream providers) set this so
+       *  the character label shows the name instead of the cwd basename. */
+      agentName?: string;
     }
   | { kind: 'sessionEnd'; reason?: string };
 
@@ -102,6 +106,12 @@ export interface HookProvider {
   /** Terminal name prefix used when launching this CLI. Used by the extension to
    *  match VS Code terminals to agents for heuristic adoption. */
   readonly terminalNamePrefix?: string;
+  /** When true, sessions from this provider are always adopted, bypassing the
+   *  workspace project-dir gate and the "Watch All Sessions" setting. Push/stream
+   *  providers (SSE) set this: their sessions come from an explicitly configured
+   *  upstream, so every session is intentional. Filesystem-scanning providers
+   *  leave it unset. */
+  readonly adoptAllSessions?: boolean;
 
   // ── Optional file fallback (heuristic mode) ──
 

@@ -94,9 +94,13 @@ export class AgentRuntime {
 
     // Wire hook lifecycle callbacks to shared agent operations
     this.hookEventHandler.setLifecycleCallbacks({
-      onExternalSessionDetected: (sessionId, transcriptPath, cwd) => {
+      onExternalSessionDetected: (sessionId, transcriptPath, cwd, agentName) => {
         const projectDir = transcriptPath ? path.dirname(transcriptPath) : cwd;
-        if (!isTrackedProjectDir(projectDir) && !this.watchAllSessions.current) {
+        if (
+          !provider.adoptAllSessions &&
+          !isTrackedProjectDir(projectDir) &&
+          !this.watchAllSessions.current
+        ) {
           return;
         }
         adoptExternalSessionFromHook(
@@ -112,6 +116,7 @@ export class AgentRuntime {
           this.permissionTimers,
           () => this.store.persist(),
           (agent) => this.registerAgent(agent.sessionId, agent.id),
+          agentName,
         );
       },
       onSessionClear: (agentId, newSessionId, newTranscriptPath) => {

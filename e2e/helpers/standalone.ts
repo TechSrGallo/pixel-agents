@@ -26,6 +26,11 @@ export interface StandaloneSession {
   drainMessages: () => Promise<RecordedServerMessage[]>;
 }
 
+export interface LaunchStandaloneOptions {
+  /** Extra CLI arguments appended after --port/--host (e.g. --provider sse). */
+  extraCliArgs?: string[];
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -79,6 +84,7 @@ function spawnStandaloneHost(args: {
   homeDir: string;
   hostPort: number;
   workspaceDir: string;
+  extraCliArgs: string[];
 }): ChildProcessWithoutNullStreams {
   if (!fs.existsSync(STANDALONE_CLI)) {
     throw new Error(
@@ -87,7 +93,14 @@ function spawnStandaloneHost(args: {
   }
   return spawn(
     process.execPath,
-    [STANDALONE_CLI, '--port', args.hostPort.toString(), '--host', '127.0.0.1'],
+    [
+      STANDALONE_CLI,
+      '--port',
+      args.hostPort.toString(),
+      '--host',
+      '127.0.0.1',
+      ...args.extraCliArgs,
+    ],
     {
       cwd: args.workspaceDir,
       env: {
@@ -166,7 +179,10 @@ async function openStandalonePage(page: Page, hostUrl: string): Promise<void> {
   await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible({ timeout: 30_000 });
 }
 
-export async function launchStandalone(page: Page): Promise<StandaloneSession> {
+export async function launchStandalone(
+  page: Page,
+  options: LaunchStandaloneOptions = {},
+): Promise<StandaloneSession> {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pixel-standalone-e2e-home-'));
   const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pixel-standalone-e2e-workspace-'));
   const hostPort = await getFreePort();
@@ -175,6 +191,7 @@ export async function launchStandalone(page: Page): Promise<StandaloneSession> {
     homeDir: tmpHome,
     hostPort,
     workspaceDir,
+    extraCliArgs: options.extraCliArgs ?? [],
   });
 
   let hostStdout = '';

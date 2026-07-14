@@ -1,3 +1,4 @@
+import type { HookProvider } from '../../core/src/provider.js';
 import type { AgentRuntime } from './agentRuntime.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import type { LoadedAssets, LoadedCharacterSprites, LoadedPetSprites } from './assetLoader.js';
@@ -26,6 +27,9 @@ export interface ClientMessageContext {
   cache: AssetCache | null;
   /** Install/uninstall hooks side effect. Needs server url+token known only to cli.ts. */
   onSetHooksEnabled?: SetHooksEnabledSideEffect;
+  /** Active provider whose tool taxonomy is sent via providerCapabilities.
+   *  Defaults to claudeProvider for back-compat. */
+  provider?: HookProvider;
 }
 
 // ── Setting key constants (mirror adapters/vscode/constants.ts) ──
@@ -135,10 +139,11 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   const adapter = store.getAdapter();
 
   // 1. Provider capabilities (must arrive before any agent messages)
+  const provider = ctx.provider ?? claudeProvider;
   send({
     type: 'providerCapabilities',
-    readingTools: [...claudeProvider.readingTools],
-    subagentToolNames: [...claudeProvider.subagentToolNames],
+    readingTools: [...provider.readingTools],
+    subagentToolNames: [...provider.subagentToolNames],
   });
 
   // 2. Assets (from server cache, loaded at startup via pngjs)
@@ -168,11 +173,7 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     }
   }
 
-  // 3. Layout (saved file, or bundled default)
-  const savedLayout = readLayoutFromFile();
-  send({ type: 'layoutLoaded', layout: savedLayout ?? cache?.defaultLayout ?? null });
-
-  // 4. Settings (from adapter, with sensible defaults when adapter is absent)
+  // 3. Settings (from adapter, with sensible defaults when adapter is absent)
   const cfg = readConfig();
   const watchAllSessions = adapter?.getSetting(KEY_WATCH_ALL_SESSIONS, false) ?? false;
   const hooksEnabled = adapter?.getSetting(KEY_HOOKS_ENABLED, true) ?? true;
@@ -195,10 +196,14 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     runtime.hooksEnabled.current = hooksEnabled;
   }
 
-  // 5. Restore persisted external agents (standalone only; VS Code handles its own restore)
+  // 4. Restore persisted external agents (standalone only; VS Code handles its own restore)
   runtime?.restoreExternalAgents();
 
-  // 6. Existing agents (either just restored, or from VS Code adapter if present)
+  // 5. Existing agents (either just restored, or from VS Code adapter if present).
+  // MUST be sent BEFORE layoutLoaded: the webview buffers these agents and only
+  // adds their characters when layoutLoaded arrives (seats need the final layout).
+  // Sending layout first left the buffer stranded -> empty office on browser
+  // reload while the Debug View (fed by the agents list) still knew every agent.
   const agentIds: number[] = [];
   const folderNames: Record<number, string> = {};
   const externalAgents: Record<number, boolean> = {};
@@ -219,4 +224,9 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     folderNames,
     externalAgents,
   });
+
+  // 6. Layout (saved file, or bundled default). Flushes the buffered agents
+  // in the webview, mirroring the VS Code provider's message order.
+  const savedLayout = readLayoutFromFile();
+  send({ type: 'layoutLoaded', layout: savedLayout ?? cache?.defaultLayout ?? null });
 }
