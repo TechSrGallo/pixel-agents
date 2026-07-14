@@ -200,7 +200,7 @@ This section is auto-generated. Do not edit between the markers; CI fails on dri
 
 - `e2e/standalone/hooks.spec.ts:10` — propagates hook-driven lifecycle into the browser UI (Standalone / hooks)
 - `e2e/standalone/sse.spec.ts:41` — visualizes an external SSE agent through its full lifecycle (Standalone / SSE provider)
-- `e2e/standalone/sse.spec.ts:133` — supports concurrent agents and adopts sessions seen mid-stream (Standalone / SSE provider)
+- `e2e/standalone/sse.spec.ts:131` — supports concurrent agents and adopts sessions seen mid-stream (Standalone / SSE provider)
 
 ### `@area:pets` (3 tests)
 
