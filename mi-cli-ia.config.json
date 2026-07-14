@@ -1,0 +1,15 @@
+{
+  "mcpServer" : {
+    "allow" : [
+      "read",
+      "write",
+      "exec"
+    ],
+    "enabled" : true
+  },
+  "providers" : {
+    "devin" : {
+      "model" : "claude-fable-5"
+    }
+  }
+}
