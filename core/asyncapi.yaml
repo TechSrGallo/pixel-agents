@@ -101,6 +101,7 @@ components:
         - $ref: '#/components/schemas/AgentTokenUsage'
         # Layout
         - $ref: '#/components/schemas/LayoutLoaded'
+        - $ref: '#/components/schemas/LayoutExported'
         # Assets
         - $ref: '#/components/schemas/FurnitureAssetsLoaded'
         - $ref: '#/components/schemas/CharacterSpritesLoaded'
@@ -155,6 +156,11 @@ components:
           items:
             type: string
           description: Tool names that should render the reading animation (vs typing).
+        hasSessionsFolder:
+          type: boolean
+          description: |
+            Whether the provider exposes a session transcript folder on disk
+            (enables the "Open Sessions Folder" menu item). Absent = true.
         subagentToolNames:
           type: array
           items:
@@ -435,6 +441,22 @@ components:
             - type: 'null'
         wasReset:
           type: boolean
+
+    LayoutExported:
+      description: |
+        Current layout data for a client-side download (standalone/browser
+        only). Sent in response to `exportLayout` when no host-native save
+        dialog is available; the webview turns it into a file download.
+      type: object
+      additionalProperties: false
+      required: [type, layout]
+      properties:
+        type:
+          const: layoutExported
+        layout:
+          type: object
+          description: |
+            Opaque layout object (cols, rows, tiles, furniture, tileColors).
 
     FurnitureAssetsLoaded:
       description: Furniture catalog and sprite data, sent once after webviewReady.
@@ -788,7 +810,11 @@ components:
           type: boolean
 
     ExportLayout:
-      description: Trigger layout export via host-native save dialog.
+      description: |
+        Trigger layout export. Host-native flow (VS Code) opens a native save
+        dialog and writes the file directly. Standalone/browser flow has no
+        native dialog: the server responds with `layoutExported` and the
+        webview turns it into a client-side file download.
       type: object
       additionalProperties: false
       required: [type]
@@ -797,13 +823,20 @@ components:
           const: exportLayout
 
     ImportLayout:
-      description: Trigger layout import via host-native open dialog.
+      description: |
+        Trigger layout import. Host-native flow (VS Code) opens a native open
+        dialog and reads the file directly when `data` is absent. Standalone/
+        browser flow reads the file client-side (no filesystem access) and
+        sends the parsed layout inline via `data`.
       type: object
       additionalProperties: false
       required: [type]
       properties:
         type:
           const: importLayout
+        data:
+          type: object
+          description: Parsed layout JSON read client-side (standalone/browser only).
 
     OpenSessionsFolder:
       description: Open ~/.claude/projects in the OS file manager.
@@ -815,13 +848,20 @@ components:
           const: openSessionsFolder
 
     AddExternalAssetDirectory:
-      description: Add an external asset directory (host shows a directory picker).
+      description: |
+        Add an external asset directory. Host-native flow (VS Code) shows a
+        directory picker when `path` is absent. Standalone/browser flow has no
+        directory picker with real filesystem paths: the caller supplies an
+        absolute path directly via `path`.
       type: object
       additionalProperties: false
       required: [type]
       properties:
         type:
           const: addExternalAssetDirectory
+        path:
+          type: string
+          description: Absolute directory path (standalone/browser only).
 
     RemoveExternalAssetDirectory:
       description: Remove an external asset directory by path.

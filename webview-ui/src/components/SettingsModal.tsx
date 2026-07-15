@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
+import { readLayoutFile } from '../layoutFileIO.js';
 import { isSoundEnabled, setSoundEnabled } from '../notificationSound.js';
+import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
 import { Button } from './ui/Button.js';
 import { Checkbox } from './ui/Checkbox.js';
@@ -10,6 +12,7 @@ import { Modal } from './ui/Modal.js';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  hasSessionsFolder: boolean;
   isDebugMode: boolean;
   onToggleDebugMode: () => void;
   alwaysShowOverlay: boolean;
@@ -24,6 +27,7 @@ interface SettingsModalProps {
 export function SettingsModal({
   isOpen,
   onClose,
+  hasSessionsFolder,
   isDebugMode,
   onToggleDebugMode,
   alwaysShowOverlay,
@@ -35,17 +39,20 @@ export function SettingsModal({
   onToggleHooksEnabled,
 }: SettingsModalProps) {
   const [soundLocal, setSoundLocal] = useState(isSoundEnabled);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Settings">
-      <MenuItem
-        onClick={() => {
-          transport.send({ type: 'openSessionsFolder' });
-          onClose();
-        }}
-      >
-        Open Sessions Folder
-      </MenuItem>
+      {hasSessionsFolder && (
+        <MenuItem
+          onClick={() => {
+            transport.send({ type: 'openSessionsFolder' });
+            onClose();
+          }}
+        >
+          Open Sessions Folder
+        </MenuItem>
+      )}
       <MenuItem
         onClick={() => {
           transport.send({ type: 'exportLayout' });
@@ -56,14 +63,42 @@ export function SettingsModal({
       </MenuItem>
       <MenuItem
         onClick={() => {
+          if (isBrowserRuntime) {
+            importInputRef.current?.click();
+            return;
+          }
           transport.send({ type: 'importLayout' });
           onClose();
         }}
       >
         Import Layout
       </MenuItem>
+      {isBrowserRuntime && (
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            void readLayoutFile(file)
+              .then((data) => {
+                transport.send({ type: 'importLayout', data });
+                onClose();
+              })
+              .catch((err) => console.error('[Settings] Failed to read layout file:', err));
+          }}
+        />
+      )}
       <MenuItem
         onClick={() => {
+          if (isBrowserRuntime) {
+            const path = window.prompt('Absolute path to the asset directory:')?.trim();
+            if (path) transport.send({ type: 'addExternalAssetDirectory', path });
+            return;
+          }
           transport.send({ type: 'addExternalAssetDirectory' });
           onClose();
         }}

@@ -327,6 +327,7 @@ export class PixelAgentsViewProvider implements vscode.WebviewViewProvider {
           type: 'providerCapabilities',
           readingTools: [...claudeProvider.readingTools],
           subagentToolNames: [...claudeProvider.subagentToolNames],
+          hasSessionsFolder: !!claudeProvider.getSessionDirs,
         });
         restoreAgents(
           this.adapter,
