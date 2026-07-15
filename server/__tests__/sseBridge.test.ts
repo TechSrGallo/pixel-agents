@@ -89,6 +89,14 @@ describe('createSseEventPump', () => {
     ]);
   });
 
+  it('drops agent.session.ended for sessions it never saw start', () => {
+    // The hub emits session.ended unconditionally (its per-connection
+    // translator cannot know what we saw). Adopting here would spawn a
+    // character just to despawn it one event later (visible flicker).
+    pump('agent.session.ended', payload());
+    expect(emitted).toHaveLength(0);
+  });
+
   it('forgets a session after agent.session.ended and re-adopts on the next event', () => {
     pump('agent.session.started', payload());
     pump('agent.session.ended', payload());
