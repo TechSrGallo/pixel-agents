@@ -78,6 +78,7 @@ interface ExtensionMessageState {
   hooksEnabled: boolean;
   setHooksEnabled: (v: boolean) => void;
   hooksInfoShown: boolean;
+  hasSessionsFolder: boolean;
 }
 
 function saveAgentSeats(os: OfficeState): void {
@@ -115,6 +116,7 @@ export function useExtensionMessages(
   const [alwaysShowLabels, setAlwaysShowLabels] = useState(false);
   const [hooksEnabled, setHooksEnabled] = useState(true);
   const [hooksInfoShown, setHooksInfoShown] = useState(true);
+  const [hasSessionsFolder, setHasSessionsFolder] = useState(true);
 
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false);
@@ -164,6 +166,9 @@ export function useExtensionMessages(
           readingTools: msg.readingTools,
           subagentToolNames: msg.subagentToolNames,
         });
+        if (typeof msg.hasSessionsFolder === 'boolean') {
+          setHasSessionsFolder(msg.hasSessionsFolder as boolean);
+        }
         return;
       }
 
@@ -595,6 +600,9 @@ export function useExtensionMessages(
       } else if (msg.type === 'agentTokenUsage') {
         const id = msg.id as number;
         os.setAgentTokens(id, msg.inputTokens as number, msg.outputTokens as number);
+      } else if (msg.type === 'layoutExported') {
+        // Standalone/browser: the server shipped the saved layout for download.
+        downloadLayoutFile(msg.layout);
       }
     };
     const unsubscribe = transport.onMessage(handler);
@@ -623,5 +631,6 @@ export function useExtensionMessages(
     hooksEnabled,
     setHooksEnabled,
     hooksInfoShown,
+    hasSessionsFolder,
   };
 }
