@@ -30,6 +30,10 @@ export type AgentEvent =
        *  its response (Stop). Drives the "Waiting for input" vs "Done" label.
        *  Absent/false = the agent finished its turn (Done). */
       awaitingInput?: boolean;
+      /** True when the turn ended in failure (SSE `result: 'failed'` or
+       *  `status: 'failed'`). Drives the red "failed" bubble instead of the
+       *  green "Done" checkmark. Absent/false = the turn succeeded. */
+      failed?: boolean;
     }
   | {
       kind: 'subagentStart';

@@ -30,7 +30,8 @@ import {
 //   agent.tool.completed        → toolEnd
 //   agent.permission.requested  → permissionRequest
 //   agent.message               → toolStart (activity label shows the message)
-//   agent.session.completed     → turnEnd  (character stays, "Done")
+//   agent.session.completed     → turnEnd  (character stays, "Done"; result:
+//                                 'failed' sets failed → red bubble)
 //   agent.session.ended         → sessionEnd (character despawns)
 //   pixel-agents.session.confirm→ progress (internal confirmation, then dropped)
 
@@ -50,8 +51,9 @@ function statusToEvent(raw: Record<string, unknown>): AgentEvent {
   switch (status) {
     case 'idle':
     case 'completed':
-    case 'failed':
       return { kind: 'turnEnd' };
+    case 'failed':
+      return { kind: 'turnEnd', failed: true };
     case 'waiting_input':
     case 'blocked':
       return { kind: 'turnEnd', awaitingInput: true };
@@ -130,9 +132,13 @@ export function normalizeSseEvent(
       };
 
     case SSE_EVENT_SESSION_COMPLETED:
-      // Keep the character in the office showing "Done". Upstreams that want the
-      // character removed send agent.session.ended instead.
-      return { sessionId, event: { kind: 'turnEnd' } };
+      // Keep the character in the office showing "Done" — or the red failed
+      // bubble when the upstream reports `result: 'failed'`. Upstreams that
+      // want the character removed send agent.session.ended instead.
+      return {
+        sessionId,
+        event: raw.result === 'failed' ? { kind: 'turnEnd', failed: true } : { kind: 'turnEnd' },
+      };
 
     case SSE_EVENT_SESSION_ENDED:
       return {
