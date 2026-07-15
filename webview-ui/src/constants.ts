@@ -111,6 +111,26 @@ export const PERMISSION_NOTE_2_START_SEC = 0.12;
 export const PERMISSION_NOTE_DURATION_SEC = 0.15;
 export const PERMISSION_VOLUME = 0.12;
 
+// ── Failed Sound (turn ended in error: descending tritone) ──
+// Deliberately dissonant (A4 → Eb4, a tritone down) and longer than the
+// done chime so success/failure are distinguishable by ear alone.
+export const FAILED_NOTE_1_HZ = 440; // A4
+export const FAILED_NOTE_2_HZ = 311.13; // Eb4 (tritone down)
+export const FAILED_NOTE_1_START_SEC = 0;
+export const FAILED_NOTE_2_START_SEC = 0.14;
+export const FAILED_NOTE_DURATION_SEC = 0.22;
+export const FAILED_VOLUME = 0.14;
+
+// ── Received Sound (turn start: soft ascending tap) ────────
+// Plays on the idle→active edge (agent picks up work). Softer and
+// lower than the done chime so it reads as "incoming" not "finished".
+export const RECEIVED_NOTE_1_HZ = 523.25; // C5
+export const RECEIVED_NOTE_2_HZ = 659.25; // E5 (up a third)
+export const RECEIVED_NOTE_1_START_SEC = 0;
+export const RECEIVED_NOTE_2_START_SEC = 0.09;
+export const RECEIVED_NOTE_DURATION_SEC = 0.12;
+export const RECEIVED_VOLUME = 0.1;
+
 // ── Furniture Animation ─────────────────────────────────────
 export const FURNITURE_ANIM_INTERVAL_SEC = 0.2;
 

@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { playDoneSound, playPermissionSound, setSoundEnabled } from '../notificationSound.js';
+import {
+  playDoneSound,
+  playFailedSound,
+  playPermissionSound,
+  playReceivedSound,
+  setSoundEnabled,
+} from '../notificationSound.js';
 import type { OfficeState } from '../office/engine/officeState.js';
 import { setFloorSprites } from '../office/floorTiles.js';
 import { buildDynamicCatalog } from '../office/layout/furnitureCatalog.js';
@@ -113,6 +119,12 @@ export function useExtensionMessages(
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false);
 
+  // Agents currently active (working). Detects the idle→active EDGE for the
+  // "task received" sound: `agentStatus: 'active'` is re-broadcast on every
+  // tool start, so without the edge gate the tap would spam mid-turn. A ref
+  // (not state): consumed inside the message handler only, never rendered.
+  const activeAgentsRef = useRef<Set<number>>(new Set());
+
   useEffect(() => {
     // Buffer agents from existingAgents until layout is loaded
     let pendingAgents: Array<{
@@ -215,6 +227,7 @@ export function useExtensionMessages(
         saveAgentSeats(os);
       } else if (msg.type === 'agentClosed') {
         const id = msg.id as number;
+        activeAgentsRef.current.delete(id);
         setAgents((prev) => prev.filter((a) => a !== id));
         setSelectedAgent((prev) => (prev === id ? null : prev));
         setAgentTools((prev) => {
@@ -374,9 +387,26 @@ export function useExtensionMessages(
           return { ...prev, [id]: status };
         });
         os.setAgentActive(id, status === 'active');
+        if (status === 'active') {
+          // Idle→active edge = the agent picked up work. Covers the FIRST
+          // dispatch of a task too, which has no preceding done chime.
+          if (!activeAgentsRef.current.has(id)) {
+            activeAgentsRef.current.add(id);
+            playReceivedSound();
+          }
+        } else {
+          activeAgentsRef.current.delete(id);
+        }
         if (status === 'waiting') {
-          os.showWaitingBubble(id, msg.awaitingInput === true);
-          playDoneSound();
+          const failed = msg.failed === true;
+          os.showWaitingBubble(id, msg.awaitingInput === true, failed);
+          // Distinct sound per outcome: ascending chime = success,
+          // descending tritone = failure (audible without looking).
+          if (failed) {
+            playFailedSound();
+          } else {
+            playDoneSound();
+          }
         }
       } else if (msg.type === 'agentToolPermission') {
         const id = msg.id as number;

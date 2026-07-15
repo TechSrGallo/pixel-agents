@@ -1,4 +1,10 @@
 import {
+  FAILED_NOTE_1_HZ,
+  FAILED_NOTE_1_START_SEC,
+  FAILED_NOTE_2_HZ,
+  FAILED_NOTE_2_START_SEC,
+  FAILED_NOTE_DURATION_SEC,
+  FAILED_VOLUME,
   NOTIFICATION_NOTE_1_HZ,
   NOTIFICATION_NOTE_1_START_SEC,
   NOTIFICATION_NOTE_2_HZ,
@@ -11,6 +17,12 @@ import {
   PERMISSION_NOTE_2_START_SEC,
   PERMISSION_NOTE_DURATION_SEC,
   PERMISSION_VOLUME,
+  RECEIVED_NOTE_1_HZ,
+  RECEIVED_NOTE_1_START_SEC,
+  RECEIVED_NOTE_2_HZ,
+  RECEIVED_NOTE_2_START_SEC,
+  RECEIVED_NOTE_DURATION_SEC,
+  RECEIVED_VOLUME,
 } from './constants.js';
 import { isE2E } from './runtime.js';
 
@@ -22,7 +34,7 @@ let audioCtx: AudioContext | null = null;
  *  declared by testHooks.ts). Records BEFORE the soundEnabled gate so tests
  *  verify dispatch independent of user audio prefs. Gated on the e2e harness
  *  flag so this unbounded log never grows in a real session. */
-function recordSoundForTests(kind: 'done' | 'permission'): void {
+function recordSoundForTests(kind: 'done' | 'permission' | 'received' | 'failed'): void {
   if (!isE2E || typeof window === 'undefined') return;
   if (!window.__pixelAgentsTestHooks) window.__pixelAgentsTestHooks = {};
   if (!window.__pixelAgentsTestHooks.playedSounds) {
@@ -106,6 +118,70 @@ export async function playPermissionSound(): Promise<void> {
       PERMISSION_NOTE_2_START_SEC,
       PERMISSION_NOTE_DURATION_SEC,
       PERMISSION_VOLUME,
+    );
+  } catch {
+    // Audio may not be available
+  }
+}
+
+/** Turn ended in FAILURE. Descending tritone (dissonant) so it can't be
+ *  confused with the ascending done chime — success/failure by ear alone. */
+export async function playFailedSound(): Promise<void> {
+  recordSoundForTests('failed');
+  if (!soundEnabled) return;
+  try {
+    if (!audioCtx) {
+      audioCtx = new AudioContext();
+    }
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+    // Descending two-note tritone: A4 → Eb4
+    playNote(
+      audioCtx,
+      FAILED_NOTE_1_HZ,
+      FAILED_NOTE_1_START_SEC,
+      FAILED_NOTE_DURATION_SEC,
+      FAILED_VOLUME,
+    );
+    playNote(
+      audioCtx,
+      FAILED_NOTE_2_HZ,
+      FAILED_NOTE_2_START_SEC,
+      FAILED_NOTE_DURATION_SEC,
+      FAILED_VOLUME,
+    );
+  } catch {
+    // Audio may not be available
+  }
+}
+
+/** Turn start: an agent picked up work (idle→active edge). Softer ascending
+ *  tap so "incoming task" is audible without competing with the done chime. */
+export async function playReceivedSound(): Promise<void> {
+  recordSoundForTests('received');
+  if (!soundEnabled) return;
+  try {
+    if (!audioCtx) {
+      audioCtx = new AudioContext();
+    }
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+    // Ascending two-note tap: C5 → E5
+    playNote(
+      audioCtx,
+      RECEIVED_NOTE_1_HZ,
+      RECEIVED_NOTE_1_START_SEC,
+      RECEIVED_NOTE_DURATION_SEC,
+      RECEIVED_VOLUME,
+    );
+    playNote(
+      audioCtx,
+      RECEIVED_NOTE_2_HZ,
+      RECEIVED_NOTE_2_START_SEC,
+      RECEIVED_NOTE_DURATION_SEC,
+      RECEIVED_VOLUME,
     );
   } catch {
     // Audio may not be available
