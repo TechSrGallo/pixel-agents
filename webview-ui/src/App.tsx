@@ -81,6 +81,7 @@ function App() {
     hooksEnabled,
     setHooksEnabled,
     hooksInfoShown,
+    hasSessionsFolder,
   } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty);
 
   // Show migration notice once layout reset is detected
@@ -358,6 +359,7 @@ function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        hasSessionsFolder={hasSessionsFolder}
         isDebugMode={isDebugMode}
         onToggleDebugMode={handleToggleDebugMode}
         alwaysShowOverlay={alwaysShowOverlay}
