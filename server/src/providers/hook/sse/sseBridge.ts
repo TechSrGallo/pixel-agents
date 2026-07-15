@@ -81,6 +81,14 @@ export function createSseEventPump(emit: HookEventSink): (eventName: string, dat
       return;
     }
 
+    // A sessionEnd for a session we never saw is a no-op: adopting it would
+    // spawn a character just to despawn it one event later (visible flicker).
+    // The hub emits session.ended unconditionally (its translator is
+    // per-connection and cannot know what we saw), so this drop is ours.
+    if (kind === 'sessionEnd' && !seenSessions.has(key)) {
+      return;
+    }
+
     // Mid-stream attach: an event for a session we never saw start. Adopt it first
     // so the dispatcher doesn't silently drop the event for an unknown session.
     if (!seenSessions.has(key)) {
