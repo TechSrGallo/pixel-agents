@@ -1,3 +1,6 @@
+import { spawn } from 'child_process';
+import * as fs from 'fs';
+
 import type { HookProvider } from '../../core/src/provider.js';
 import type { AgentRuntime } from './agentRuntime.js';
 import type { AgentStateStore } from './agentStateStore.js';
@@ -127,9 +130,50 @@ export function handleClientMessage(
       break;
     }
 
+    case 'exportLayout': {
+      // Standalone/browser flow: no host-native save dialog. Ship the saved
+      // layout back so the webview can turn it into a file download. Fall back
+      // to the bundled default when nothing was saved yet (mirrors webviewReady).
+      const layout = readLayoutFromFile() ?? ctx.cache?.defaultLayout;
+      if (layout) {
+        send({ type: 'layoutExported', layout });
+      }
+      break;
+    }
+
+    case 'importLayout': {
+      // Standalone/browser flow: the client reads the file and sends the parsed
+      // layout inline via `data`. (VS Code's native open-dialog flow lives in
+      // the adapter.)
+      const data = msg.data as Record<string, unknown> | undefined;
+      if (!data) break;
+      if (data.version !== 1 || !Array.isArray(data.tiles)) break;
+      writeLayoutToFile(data);
+      send({ type: 'layoutLoaded', layout: data });
+      break;
+    }
+
+    case 'openSessionsFolder': {
+      // Standalone: open the provider's session folder in the host OS file
+      // manager. Push providers (sse) have no session dirs; the webview hides
+      // the menu item via providerCapabilities.hasSessionsFolder.
+      const provider = ctx.provider ?? claudeProvider;
+      const projectDir = provider.getSessionDirs?.(process.cwd())[0];
+      const rootDir = provider.getAllSessionRoots?.()[0];
+      const target = [projectDir, rootDir].find((d) => d && fs.existsSync(d));
+      if (!target) break;
+      const cmd =
+        process.platform === 'darwin'
+          ? 'open'
+          : process.platform === 'win32'
+            ? 'explorer'
+            : 'xdg-open';
+      spawn(cmd, [target], { detached: true, stdio: 'ignore' }).unref();
+      break;
+    }
+
     default:
-      // focusAgent, exportLayout, importLayout
-      // require IDE-specific handling (not yet implemented for standalone)
+      // focusAgent requires IDE-specific handling (not implemented for standalone).
       break;
   }
 }
@@ -144,6 +188,7 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     type: 'providerCapabilities',
     readingTools: [...provider.readingTools],
     subagentToolNames: [...provider.subagentToolNames],
+    hasSessionsFolder: !!provider.getSessionDirs,
   });
 
   // 2. Assets (from server cache, loaded at startup via pngjs)
