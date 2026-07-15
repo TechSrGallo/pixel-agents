@@ -172,6 +172,9 @@ export interface Character {
    *  false/undefined when the agent simply finished its turn (checkmark only,
    *  label falls through to idle). */
   waitingAwaitingInput?: boolean;
+  /** Only meaningful while bubbleType === 'waiting': true when the turn ended
+   *  in failure — the bubble renders red instead of the green checkmark. */
+  waitingFailed?: boolean;
   /** Countdown timer for bubble (waiting: 2→0, permission: unused) */
   bubbleTimer: number;
   /** Timer to stay seated while inactive after seat reassignment (counts down to 0) */

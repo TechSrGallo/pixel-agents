@@ -79,9 +79,16 @@ describe('normalizeSseEvent', () => {
   });
 
   it('maps terminal statuses to turnEnd', () => {
-    for (const status of ['idle', 'completed', 'failed']) {
+    for (const status of ['idle', 'completed']) {
       expect(norm('agent.status.changed', { status })?.event).toEqual({ kind: 'turnEnd' });
     }
+  });
+
+  it('maps status failed to turnEnd(failed)', () => {
+    expect(norm('agent.status.changed', { status: 'failed' })?.event).toEqual({
+      kind: 'turnEnd',
+      failed: true,
+    });
   });
 
   it('maps waiting statuses to turnEnd(awaitingInput)', () => {
@@ -126,6 +133,13 @@ describe('normalizeSseEvent', () => {
   it('maps agent.session.completed to turnEnd (character stays)', () => {
     expect(norm('agent.session.completed', { result: 'success' })?.event).toEqual({
       kind: 'turnEnd',
+    });
+  });
+
+  it('maps agent.session.completed(result: failed) to turnEnd(failed)', () => {
+    expect(norm('agent.session.completed', { result: 'failed' })?.event).toEqual({
+      kind: 'turnEnd',
+      failed: true,
     });
   });
 

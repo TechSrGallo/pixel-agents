@@ -720,11 +720,12 @@ export class OfficeState {
     }
   }
 
-  showWaitingBubble(id: number, awaitingInput = false): void {
+  showWaitingBubble(id: number, awaitingInput = false, failed = false): void {
     const ch = this.characters.get(id);
     if (ch) {
       ch.bubbleType = 'waiting';
       ch.waitingAwaitingInput = awaitingInput;
+      ch.waitingFailed = failed;
       ch.bubbleTimer = WAITING_BUBBLE_DURATION_SEC;
     }
   }

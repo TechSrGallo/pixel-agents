@@ -348,7 +348,12 @@ export class HookEventHandler {
         // Handles Stop AND Notification(idle_prompt) -- both normalize to turnEnd.
         // awaitingInput discriminates them: idle_prompt sets it (-> "Waiting for
         // input"), Stop leaves it absent (-> "Done").
-        return this.handleStop(agent, agentId, normEvent.awaitingInput === true);
+        return this.handleStop(
+          agent,
+          agentId,
+          normEvent.awaitingInput === true,
+          normEvent.failed === true,
+        );
       case 'subagentTurnEnd':
         // Handles TeammateIdle AND TaskCompleted -- both normalize here. The normalized
         // `reason` field discriminates; the team-provider's extractTeammateNameFromEvent(raw)
@@ -637,8 +642,13 @@ export class HookEventHandler {
   }
 
   /** Handle Stop: Claude finished responding, mark agent as waiting. */
-  private handleStop(agent: AgentState, agentId: number, awaitingInput = false): void {
-    this.markAgentWaiting(agent, agentId, awaitingInput);
+  private handleStop(
+    agent: AgentState,
+    agentId: number,
+    awaitingInput = false,
+    failed = false,
+  ): void {
+    this.markAgentWaiting(agent, agentId, awaitingInput, failed);
   }
 
   /**
@@ -714,7 +724,12 @@ export class HookEventHandler {
    * agents), cancels timers, and notifies the webview. Same logic as the turn_duration
    * handler in transcriptParser.ts.
    */
-  private markAgentWaiting(agent: AgentState, agentId: number, awaitingInput = false): void {
+  private markAgentWaiting(
+    agent: AgentState,
+    agentId: number,
+    awaitingInput = false,
+    failed = false,
+  ): void {
     cancelWaitingTimer(agentId, this.waitingTimers);
     cancelPermissionTimer(agentId, this.permissionTimers);
 
@@ -757,6 +772,7 @@ export class HookEventHandler {
       id: agentId,
       status: 'waiting',
       awaitingInput,
+      failed,
     });
   }
 

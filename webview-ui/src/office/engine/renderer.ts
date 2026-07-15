@@ -549,6 +549,11 @@ function renderBubbles(
 
     ctx.save();
     if (alpha < 1.0) ctx.globalAlpha = alpha;
+    // Failed turn: reuse the checkmark bubble sprite hue-rotated from green
+    // to red — no separate sprite asset needed.
+    if (ch.bubbleType === 'waiting' && ch.waitingFailed) {
+      ctx.filter = 'hue-rotate(240deg) saturate(1.6)';
+    }
     ctx.drawImage(cached, bubbleX, bubbleY);
     ctx.restore();
   }
